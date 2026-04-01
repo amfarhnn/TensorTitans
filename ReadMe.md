@@ -11,4 +11,4 @@
 3. Muhammad Amin bin Mohamad Rizal (2217535)
 
 ### Selected Project Track: *Track 1: Kaggle Competition*
-### Topic Title: *Titanic - Machine Learning from Disaster*
+### Topic Title: *WiDS Global Datathon 2026*

@@ -5,6 +5,8 @@
 ⚡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⚡
 
 ### Group Name: *Tensor Titans*
+Drive Google Collab link --> [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)]
+(https://colab.research.google.com/drive/1vBPurjaW-FoK5wEFkfzQJPGDaxYMG1UM?usp=sharing)
 ### Members:
 1. Amir Farhan bin Ghaffar (2115617)
 2. Muhammad Irsyad Ilham bin Azizan (2217555)

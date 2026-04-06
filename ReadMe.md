@@ -13,3 +13,4 @@ Drive Google Collab link --> [![Open In Colab](https://colab.research.google.com
 
 ### Selected Project Track: *Track 1: Kaggle Competition*
 ### Topic Title: *WiDS Global Datathon 2026*
+'https://www.kaggle.com/competitions/WiDSWorldWide_GlobalDathon26'

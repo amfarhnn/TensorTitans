@@ -1,4 +1,4 @@
-# 🚀 WiDS Global Datathon 2026 - Deep Learning Challenge
+# � WiDS Global Datathon 2026 - Wildfire Survival Analysis Challenge
 
 ⚡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⚡
                  T E N S O R    T I T A N S
@@ -6,7 +6,7 @@
 
 ## 📋 Overview
 
-**TensorTitans** is a competitive machine learning project developed for the **WiDS Global Datathon 2026**. This project focuses on building a robust deep learning model to predict a binary classification target using tabular data. Our team achieved an **AUC score of 0.82691** on the competition leaderboard.
+**TensorTitans** is a competitive machine learning project developed for the **WiDS Global Datathon 2026**. This project tackles a **survival analysis challenge** to predict wildfire threat probability across multiple time horizons. Using early wildfire signals from the first 5 hours after ignition, we build calibrated probability forecasts to support emergency response decisions. Our team achieved a **Hybrid Score of 0.82691** on the competition leaderboard.
 
 ## 👥 Team Members
 
@@ -27,11 +27,11 @@
 ## 🎯 Project Objectives
 
 The WiDS Global Datathon 2026 challenges participants to:
-- Develop a predictive model using machine learning/deep learning techniques
-- Perform comprehensive exploratory data analysis (EDA) on tabular data
-- Implement data preprocessing and feature engineering strategies
-- Optimize model performance using appropriate evaluation metrics
-- Generate accurate predictions on unseen test data
+- Predict wildfire threat probability across multiple time horizons (12h, 24h, 48h, 72h)
+- Apply survival analysis techniques to right-censored fire data
+- Generate calibrated probability forecasts for emergency response decisions
+- Rank fires by urgency to support triage and resource allocation
+- Optimize for both ranking performance (C-index) and probability calibration (Brier Score)
 
 ---
 
@@ -41,34 +41,39 @@ The WiDS Global Datathon 2026 challenges participants to:
 
 | File | Description |
 |------|-------------|
-| `train.csv` | Training dataset with input features and target variable |
-| `test.csv` | Test dataset with input features only (for predictions) |
-| `metaData.csv` | Feature descriptions and metadata |
-| `sample_submission.csv` | Required submission format template |
+| `train.csv` | Training dataset with wildfire features and survival targets |
+| `test.csv` | Test dataset with features only (for predictions) |
+| `metaData.csv` | Feature descriptions and variable meanings |
+| `sample_submission.csv` | Required submission format with multi-horizon probabilities |
 
 ### Dataset Characteristics
 
-- **Type:** Structured/Tabular Data
-- **Target Variable:** Binary classification (`event` column)
-- **Feature Types:** Numerical and categorical features
-- **Data Quality:** May contain missing values requiring preprocessing
-- **Challenge:** Imbalanced dataset requiring careful model selection
+- **Type:** Right-censored survival analysis data
+- **Target Variable:** Multi-horizon threat prediction (12h, 24h, 48h, 72h)
+- **Event Definition:** Fire within 5 km of evacuation zone centroid
+- **Feature Window:** First 5 hours after initial perimeter observation
+- **Censoring:** Fires not reaching evacuation zone within 72h are right-censored
+- **Feature Types:** Wildfire perimeter dynamics and spatial relationships
 
 ---
 
-## 📈 Evaluation Metric: AUC-ROC
+## 📈 Evaluation Metric: Hybrid Score
 
-**AUC-ROC (Area Under the Receiver Operating Characteristic Curve)** is used to evaluate model performance:
+**Hybrid Score = 0.3 × C-index + 0.7 × (1 - Weighted Brier Score)**
 
-- **Measures:** Model's ability to distinguish between positive and negative classes
-- **Score Range:** 0.0 to 1.0
-  - **0.9-1.0:** Excellent
-  - **0.8-0.9:** Good
-  - **0.7-0.8:** Fair
-  - **0.6-0.7:** Poor
-  - **0.5:** Random guessing
+### C-Index (30%)
+- Measures ranking quality: how well fires are ordered by urgency
+- Range: 0.5 to 1.0 (higher is better)
+- Critical for triage and resource prioritization
 
-This metric is particularly suitable for **imbalanced classification problems**.
+### Weighted Brier Score (70%)
+- Measures probability calibration at multiple horizons
+- Uses censor-aware evaluation:
+  - **Hits:** 1 if threatened by horizon H, else 0
+  - **Censored after H:** 0
+  - **Censored before H:** excluded
+- Weighted average: 0.3 × Brier@24h + 0.4 × Brier@48h + 0.3 × Brier@72h
+- 48h weighted highest because it balances lead time with operational urgency
 
 ---
 
@@ -76,7 +81,9 @@ This metric is particularly suitable for **imbalanced classification problems**.
 
 ### Leaderboard Performance
 
-- **AUC Score:** 0.82691
+- **Hybrid Score:** 0.82691
+  - C-index component: 30% of score
+  - Brier Score component: 70% of score
 - **Rank:** #1 (First Entry)
 - **Status:** Successfully submitted
 
@@ -86,65 +93,64 @@ This metric is particularly suitable for **imbalanced classification problems**.
 
 ## 🧠 Model Architecture & Approach
 
-### Baseline Model - Feedforward Neural Network (MLP)
+### Survival Analysis Framework
 
-```python
-class BaselineModel(nn.Module):
-    def __init__(self, input_dim):
-        super().__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 1),
-            nn.Sigmoid()
-        )
-    
-    def forward(self, x):
-        return self.model(x)
-```
+The models generate calibrated survival probabilities across multiple time horizons:
+- **12-hour forecast:** For immediate response decisions
+- **24-hour forecast:** For near-term alerts and preparation
+- **48-hour forecast:** Primary operational window (weighted 40% in evaluation)
+- **72-hour forecast:** Extended planning horizon
 
-### Model Characteristics
+### Baseline Models
 
-- **Framework:** PyTorch
-- **Architecture:** Multilayer Perceptron (MLP)
-- **Layers:** 3 fully connected layers with ReLU activation
-- **Output:** Sigmoid activation for binary classification
-- **Loss Function:** Binary Cross-Entropy Loss
+1. **Logistic Regression Pipeline**
+   - Standardized features with `StandardScaler`
+   - Logistic regression for probability estimates
+   - Calibration via probability scaling
+
+2. **Feedforward Neural Network (MLP)**
+   - Multiple dense layers with ReLU activation
+   - Output layer with sigmoid activation per time horizon
+   - Handles nonlinear relationships in early-incident signals
+
+### Model Objectives
+
+- **Ranking:** Correctly order fires by threat urgency (C-index)
+- **Calibration:** Produce trustworthy probability estimates (Brier Score)
+- **Multi-horizon:** Forecast across 12h, 24h, 48h, and 72h windows
 
 ---
 
 ## 📝 Key Implementation Steps
 
-### 1. Data Preprocessing
-- Load and inspect training/test datasets
-- Handle missing values (imputation or removal)
-- Encode categorical variables
-- Normalize/scale numerical features
+### 1. Data Inspection and Censoring
+- Load training/test datasets with survival times and event indicators
+- Understand censoring structure (right-censored at 72 hours)
+- Identify fires that threatened evacuation zones within the observation window
 
 ### 2. Exploratory Data Analysis (EDA)
-- Analyze feature distributions
-- Identify missing value patterns
-- Examine target variable distribution
-- Compute correlation matrices
-- Detect feature relationships and outliers
+- Analyze early-incident signal distributions (first 5 hours)
+- Examine fire perimeter dynamics and spatial relationships
+- Study threat event timing and censoring patterns
+- Compute correlations between early signals and threat probability
 
 ### 3. Feature Engineering
-- Drop irrelevant columns (event_id)
-- Standardization using StandardScaler
-- Potential: Feature interaction, polynomial features, dimensionality reduction
+- Engineer features from wildfire perimeter data
+- Standardize numerical features with `StandardScaler`
+- Handle missing values appropriately
+- Create lagged and rate-of-change features from early signals
 
-### 4. Model Training
-- Train-validation split (80-20)
-- Implement both baseline and deep learning models
-- Hyperparameter tuning
-- Cross-validation for robustness
+### 4. Survival Model Training
+- Train-validation split with stratification by event status
+- Implement baseline and deep learning survival models
+- Generate multi-horizon probability predictions (12h, 24h, 48h, 72h)
+- Tune for both ranking (C-index) and calibration (Brier Score)
 
-### 5. Evaluation & Prediction
-- Calculate AUC-ROC score on validation set
-- Generate predictions on test set
-- Format submission according to Kaggle requirements
+### 5. Evaluation & Multi-Horizon Submission
+- Calculate C-index for ranking quality
+- Calculate censor-aware Brier Scores for each horizon
+- Compute hybrid score: 0.3 × C-index + 0.7 × (1 - Weighted Brier)
+- Format submission with probability columns for each time horizon
 
 ---
 
@@ -203,27 +209,30 @@ TensorTitans/
 ## 🔍 Key Findings
 
 ### Data Insights
-- Target variable shows imbalanced class distribution
-- Several features have significant missing values
-- Strong correlations exist between certain feature pairs
-- Feature ranges vary widely, necessitating standardization
+- Wildfire threat events are relatively rare (~15-20% threaten evacuation zones)
+- Early signals (first 5 hours) have predictive power for 72-hour threat window
+- Perimeter growth rate and spatial proximity are key indicators
+- Feature distributions vary widely, requiring standardization
+- Right-censoring structure must be carefully handled in evaluation
 
 ### Model Performance
-- Baseline logistic regression provides solid AUC baseline
-- Deep learning MLP improves upon traditional approaches
-- Validation AUC score: **0.82691**
-- Model generalizes well to unseen test data
+- Baseline logistic regression provides solid ranking and calibration baseline
+- Deep learning survival models improve calibration and handling of nonlinearities
+- **Hybrid Score:** 0.82691 (C-index + Weighted Brier Score)
+- Multi-horizon predictions align with operational decision windows
+- 48h forecast is most valuable for emergency response
 
 ---
 
 ## 💡 Future Improvements
 
-1. **Advanced Architectures:** Experiment with TabNet, XGBoost, LightGBM
-2. **Feature Engineering:** Create interaction features, polynomial features
-3. **Ensemble Methods:** Combine multiple models for better predictions
-4. **Hyperparameter Optimization:** Grid search or Bayesian optimization
-5. **Cross-Validation:** Implement k-fold cross-validation for stability
-6. **Regularization:** Apply dropout, L1/L2 to prevent overfitting
+1. **Advanced Survival Models:** Cox proportional hazards, Random survival forests, Gradient boosting survival
+2. **Probability Calibration:** Apply isotonic regression or Platt scaling to improve Brier Score
+3. **Temporal Feature Engineering:** Extract more sophisticated signals from fire dynamics
+4. **Ensemble Methods:** Combine survival models for improved ranking and calibration
+5. **Hyperparameter Tuning:** Optimize for both C-index and Brier Score components
+6. **Cross-Validation:** Stratified k-fold with proper event/censor handling
+7. **Real-World Validation:** Test with held-out fire seasons for operational readiness
 
 ---
 

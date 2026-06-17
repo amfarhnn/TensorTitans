@@ -34,18 +34,7 @@ The project uses right-censored survival data, so the model must consider both w
 | `metaData.csv` | Column descriptions and feature categories. |
 | `sample_submission.csv` | Required Kaggle submission format. |
 | `Dataset_explanation.md` | Plain-language explanation of every dataset column. |
-| `Slide_Presentation.md` | Marp slide deck source. |
-| `Presentation_Script.md` | Five-minute presentation script. |
 | `Leaderboard.png` | Leaderboard screenshot. |
-
-Some report-formatting files are intentionally kept local and excluded from GitHub:
-
-| Local file | Purpose |
-|---|---|
-| `Project_Report.md` | Full report source used for document preparation. |
-| `TensorTitans_Project_Report.docx` | Microsoft Word report generated from the report source. |
-| `TensorTitans_Project_Report.pdf` | PDF export of the report, if generated locally. |
-| `Follow_this_format_and_style.docx` | Reference template used to style the Word report. |
 
 ## Dataset Summary
 
@@ -123,15 +112,6 @@ submission_improved.csv
 
 Generated submission files are ignored by Git so they do not accidentally overwrite or clutter the repository.
 
-## Report And Presentation
-
-The report and presentation materials are maintained separately from the modeling notebook:
-
-- `Dataset_explanation.md` explains the wildfire dataset in beginner-friendly language.
-- `Slide_Presentation.md` contains the presentation slide source.
-- `Presentation_Script.md` contains a five-minute speaking script.
-- `TensorTitans_Project_Report.docx` and `TensorTitans_Project_Report.pdf` are local report exports and are not pushed to GitHub.
-
 ## Key Learning Points
 
 - Wildfire threat prediction is not only a binary classification problem; timing matters.
@@ -155,4 +135,4 @@ The report and presentation materials are maintained separately from the modelin
 
 ## Status
 
-Project cleaned and updated with an improved notebook, clearer documentation, and local report exports.
+Project cleaned and updated with an improved notebook and clearer documentation.

@@ -1,0 +1,21 @@
+# Generated model outputs
+submission.csv
+submission_*.csv
+
+# Generated/local report exports
+TensorTitans_Project_Report.docx
+TensorTitans_Project_Report.pdf
+Follow_this_format_and_style.docx
+
+# Notebook runtime folders
+.ipynb_checkpoints/
+__pycache__/
+
+# Local environment files
+.env
+.venv/
+venv/
+
+# OS/editor noise
+Thumbs.db
+.DS_Store

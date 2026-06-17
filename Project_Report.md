@@ -2,248 +2,352 @@
 
 ## WiDS Worldwide Global Datathon 2026 - Wildfire Survival Analysis
 
-### University Project Template
+**Group Name:** Tensor Titans  
+**Project Track:** Track 1 - Kaggle Competition  
+**Competition:** WiDS Worldwide Global Datathon 2026  
+**Submission Date:** June 17, 2026  
 
-**Course/Module:** [Insert course name]
+### Team Members
 
-**Lecturer/Instructor:** [Insert name]
-
-**Group Name:** Tensor Titans
-
-**Project Track:** Track 1: Kaggle Competition
-
-**Competition:** [WiDS Worldwide Global Datathon 2026](https://www.kaggle.com/competitions/WiDSWorldWide_GlobalDathon26)
-
-**Submission Date:** [Insert date]
+| Member | ID |
+|---|---|
+| Amir Farhan bin Ghaffar | 2115617 |
+| Muhammad Irsyad Ilham bin Azizan | 2217555 |
+| Muhammad Amin bin Mohamad Rizal | 2217535 |
 
 ---
 
 ## Abstract
 
-This report presents the work completed by Team Tensor Titans for the WiDS Worldwide Global Datathon 2026, a Kaggle-based **survival analysis challenge** to predict wildfire threat probability across multiple time horizons. The objective was to develop calibrated probability forecasts that support emergency response decisions, using only early-incident signals from the first 5 hours after fire ignition.
+This report presents Team Tensor Titans' machine learning project for the WiDS Worldwide Global Datathon 2026. The competition focuses on wildfire threat forecasting using survival analysis. The goal is to predict the probability that a wildfire will come within 5 km of an evacuation-zone centroid within four operational time horizons: 12 hours, 24 hours, 48 hours, and 72 hours.
 
-The project followed a survival analysis framework with right-censored data. Fires are classified by whether they threaten evacuation zones within 12, 24, 48, and 72 hours. The evaluation metric is a hybrid score combining C-index (30%, ranking quality) and weighted Brier Score (70%, probability calibration). A baseline logistic regression model and a feedforward neural network were implemented. The final submission achieved a **Hybrid Score of 0.82691** on the Kaggle leaderboard, demonstrating effective ranking and calibrated probability generation.
+The dataset contains engineered wildfire features computed from the first five hours after initial fire observation. These features describe fire growth, movement, distance to evacuation zones, directional alignment, and event start time. The target is right-censored because many fires do not reach an evacuation zone during the 72-hour observation window.
+
+The project includes data inspection, feature understanding, exploratory analysis, censor-aware target construction, multi-horizon model training, validation using ranking and calibration metrics, and Kaggle submission formatting. The improved notebook, `TensorTitans_Improved.ipynb`, implements a reproducible multi-horizon baseline using regularized logistic regression blended with histogram gradient boosting. The final project documentation also includes a plain-language dataset explanation, README, presentation materials, and this full report.
+
+The team recorded a Kaggle hybrid score of 0.82691. The improved notebook strengthens the original workflow by using separate censor-aware labels for each prediction horizon instead of assigning one probability to all horizons.
 
 ---
 
 ## 1. Introduction
 
-The WiDS Worldwide Global Datathon 2026 is a machine learning competition focused on solving a real-world operational problem: **predictive wildfire threat forecasting**. When wildfires ignite, emergency managers must decide which communities to warn and where to position scarce resources, often with incomplete information. This competition frames that challenge as a **survival analysis problem** using early-incident signals.
+Wildfires are dangerous because their early movement is uncertain and emergency managers must make decisions before complete information is available. When a fire begins, authorities need to know which communities may be threatened, how soon that threat may occur, and how confident the warning should be. This competition frames that problem as a machine learning survival-analysis task.
 
-Participants develop calibrated probability forecasts that answer: Which fires will threaten populated evacuation zones? How soon? And how confident should we be in that forecast? The solution requires two complementary goals: ranking fires correctly by urgency (for triage) and producing trustworthy probability estimates (for decision thresholds).
+In this project, each row represents one wildfire event. The model receives only information from the first five hours after the initial fire perimeter observation. From those early signals, it must estimate the probability that the fire will reach the threat definition within 12, 24, 48, or 72 hours. A fire is considered a threat when it comes within 5 km of the center of an evacuation zone.
 
-This report documents the development process carried out by Team Tensor Titans. The work includes data inspection, exploratory analysis, preprocessing, survival model development, and evaluation using a hybrid metric that balances ranking and calibration.
+The project is important because a useful model must solve two related but different tasks. First, it must rank fires by urgency so response teams can prioritize limited resources. Second, it must produce calibrated probabilities that can support decision thresholds. A fire predicted at 80 percent risk should genuinely be more urgent than one predicted at 20 percent risk.
 
 ---
 
 ## 2. Problem Statement
 
-Emergency managers face a critical challenge with incomplete information: **When a wildfire ignites, which communities will it threaten, and how quickly?** The operational context requires two types of insight:
+The main question is:
 
-1. **Urgent Ranking:** Which fires demand immediate attention first?
-2. **Calibrated Forecasts:** What is the probability of threat within actionable time windows (12h, 24h, 48h, 72h)?
+> Given early wildfire measurements from the first five hours, what is the probability that the fire will threaten an evacuation zone within 12, 24, 48, and 72 hours?
 
-This competition frames the problem as **right-censored survival analysis**:
-- **Event:** Fire threatens evacuation zone centroid within 5 km
-- **Observation Window:** 72 hours from t0 + 5 hours (where t0 is initial perimeter observation)
-- **Features:** Computed only from the first 5 hours after ignition
-- **Censoring:** Fires not reaching evacuation zones within 72h are right-censored
+This is not a simple binary classification problem. A binary model can predict whether a fire eventually becomes dangerous, but it does not fully describe when the danger may happen. Emergency decisions depend strongly on timing. A fire likely to threaten a zone in 12 hours needs different action than a fire likely to threaten a zone in 72 hours.
 
-The main technical challenges are:
-- Building models that rank fires correctly by threat urgency (C-index)
-- Generating calibrated probabilities across multiple time horizons (Brier Score)
-- Handling right-censored survival data appropriately
-- Optimizing for a hybrid metric that balances ranking and calibration
+The problem is also right-censored. Some fires do not reach an evacuation-zone centroid within the observation window. For those fires, the exact future time to threat is unknown; we only know that the event was not observed during the 72-hour period. This affects how training labels and evaluation metrics must be constructed.
+
+The required submission contains four probability columns:
+
+| Column | Meaning |
+|---|---|
+| `prob_12h` | Probability of threat within 12 hours |
+| `prob_24h` | Probability of threat within 24 hours |
+| `prob_48h` | Probability of threat within 48 hours |
+| `prob_72h` | Probability of threat within 72 hours |
+
+The probabilities should be monotonic. The probability of threat by 72 hours should not be lower than the probability of threat by 48 hours because the 72-hour window includes the earlier time window.
 
 ---
 
 ## 3. Objectives
 
-The project was designed to achieve the following objectives:
+The project objectives are:
 
-- understand survival analysis and right-censored data structure,
-- inspect the dataset using exploratory analysis of early-incident signals,
-- identify patterns in wildfire perimeter dynamics and spatial relationships,
-- prepare features for survival modeling,
-- build baseline survival models for multi-horizon probability prediction,
-- evaluate models using both ranking (C-index) and calibration (Brier Score) metrics,
-- generate calibrated probability forecasts for emergency response decisions,
-- submit predictions in the required multi-horizon format.
+1. Understand the wildfire survival-analysis task and right-censored target structure.
+2. Inspect and explain the dataset columns in simple language.
+3. Prepare a clean, reproducible notebook for multi-horizon probability prediction.
+4. Construct horizon-specific labels that respect censoring.
+5. Train baseline models that balance stability and nonlinear pattern detection.
+6. Evaluate model quality using ranking and calibration metrics.
+7. Generate a valid Kaggle submission file.
+8. Improve project documentation, including README, dataset explanation, presentation materials, and Word report.
 
 ---
 
 ## 4. Dataset Description
 
-The project uses four main files:
+The project uses four primary CSV files:
 
 | File | Description |
-|------|-------------|
-| `train.csv` | Training data with wildfire features, event indicator, and threat times |
-| `test.csv` | Test data used for multi-horizon probability prediction |
-| `metaData.csv` | Feature descriptions and variable meanings |
-| `sample_submission.csv` | Reference format for multi-horizon probability submission |
+|---|---|
+| `train.csv` | Training dataset with wildfire features, event times, and event indicator |
+| `test.csv` | Test dataset with wildfire features only |
+| `metaData.csv` | Metadata describing columns, feature categories, and target variables |
+| `sample_submission.csv` | Required Kaggle submission format |
 
-### Dataset Characteristics
+The training dataset contains 221 wildfire events. The test dataset contains 95 wildfire events. The model uses 34 predictive features. The training data includes two target columns:
 
-- **Structure:** Right-censored survival analysis data
-- **Event Definition:** Fire within 5 km of evacuation zone centroid
-- **Observation Window:** From t0 + 5 hours to t0 + 77 hours (72-hour prediction window)
-- **Feature Window:** Computed from first 5 hours after initial perimeter observation
-- **Features:** Wildfire perimeter dynamics and spatial relationships
-- **Censoring:** ~80-85% censored (fires not threatening within 72h); ~15-20% uncensored (events observed)
-- **Time Horizons:** 12h, 24h, 48h, 72h prediction windows
+- `time_to_hit_hours`: time from the end of the first five-hour feature window until the fire comes within 5 km of an evacuation-zone centroid, or the last observed time for censored rows.
+- `event`: indicator where `1` means the fire hit within the 72-hour window and `0` means the fire was censored.
+
+The training data contains 69 observed events out of 221 rows, equal to approximately 31.2 percent. This means most fires in the training set did not reach the threat definition during the observation window.
 
 ---
 
-## 5. Abstract of Methodology
+## 5. Feature Groups
 
-The workflow began with understanding the survival analysis framework and right-censored data structure. Data inspection and EDA examined early-incident signal distributions, fire dynamics, and threat event timing.
+The dataset features can be understood through several groups.
 
-Features were engineered from wildfire perimeter data and standardized using `StandardScaler`. Two baseline models were implemented: a logistic regression pipeline and a feedforward neural network. Both models output calibrated probabilities for each time horizon (12h, 24h, 48h, 72h).
+### 5.1 Measurement Coverage
 
-The data was split into training and validation sets with stratification by event status. Model performance was evaluated using two metrics:
-- **C-index:** Measures ranking quality (how well fires are ordered by urgency)
-- **Weighted Brier Score:** Measures probability calibration across three horizons (24h, 48h, 72h) with censor-aware weighting
+These features describe how much early fire-perimeter information is available:
 
-The hybrid score combines these: 0.3 × C-index + 0.7 × (1 - Weighted Brier Score).
+- `num_perimeters_0_5h`
+- `dt_first_last_0_5h`
+- `low_temporal_resolution_0_5h`
 
----
+If only one perimeter is available, the model has less evidence about fire movement and growth.
 
-## 6. Exploratory Data Analysis
+### 5.2 Fire Growth
 
-Exploratory data analysis was used to understand the dataset before training any model.
+Growth features describe the size of the fire and how quickly it expands:
 
-### EDA Activities
+- `area_first_ha`
+- `area_growth_abs_0_5h`
+- `area_growth_rel_0_5h`
+- `area_growth_rate_ha_per_h`
+- `log1p_area_first`
+- `log1p_growth`
+- `log_area_ratio_0_5h`
+- `relative_growth_0_5h`
+- `radial_growth_m`
+- `radial_growth_rate_m_per_h`
 
-- loading `train.csv`, `test.csv`, and `metaData.csv`,
-- checking dataset shape and column structure,
-- viewing sample rows,
-- generating summary statistics,
-- identifying missing values,
-- checking the target distribution,
-- examining correlations between features.
+Fast-growing fires are often more dangerous, especially when they are also close to populated or evacuation areas.
 
-### Purpose of EDA
+### 5.3 Fire Movement
 
-The EDA stage helped identify data quality issues and provided a clearer understanding of the relationships within the dataset. This supported better preprocessing and modeling decisions.
+Centroid movement features describe how the center of the fire changes over time:
 
----
+- `centroid_displacement_m`
+- `centroid_speed_m_per_h`
+- `spread_bearing_deg`
+- `spread_bearing_sin`
+- `spread_bearing_cos`
 
-## 7. Methodology
+The sine and cosine versions of spread bearing help machine learning models understand direction without treating 359 degrees and 1 degree as far apart.
 
-### 7.1 Data Preprocessing
+### 5.4 Distance To Evacuation Zone
 
-The preprocessing pipeline followed the steps below:
+Distance features describe the relationship between the fire and the nearest evacuation-zone centroid:
 
-- remove irrelevant identifier columns such as `event_id`,
-- handle missing values,
-- standardize numerical features using `StandardScaler`,
-- prepare the dataset for binary classification.
+- `dist_min_ci_0_5h`
+- `dist_std_ci_0_5h`
+- `dist_change_ci_0_5h`
+- `dist_slope_ci_0_5h`
+- `closing_speed_m_per_h`
+- `closing_speed_abs_m_per_h`
+- `projected_advance_m`
+- `dist_accel_m_per_h2`
+- `dist_fit_r2_0_5h`
 
-Preprocessing is essential because tabular data often contains variables with different scales and missing entries. Standardization improves the stability of many machine learning models, especially gradient-based approaches.
+These are highly relevant because a fire that is already close and moving closer is more likely to threaten an evacuation zone soon.
 
-### 7.2 Baseline Modeling
+### 5.5 Directional Alignment
 
-Two baseline approaches were used in the notebook.
+Directionality features describe whether the fire is moving toward or away from the evacuation zone:
 
-#### Logistic Regression Pipeline
+- `alignment_cos`
+- `alignment_abs`
+- `cross_track_component`
+- `along_track_speed`
 
-The notebook includes a scikit-learn pipeline consisting of:
+Positive alignment and high along-track speed are important signs that the fire is moving in a dangerous direction.
 
-- standardization,
-- logistic regression with a high iteration limit.
+### 5.6 Time Metadata
 
-This provides a strong and interpretable baseline for binary classification.
+Time metadata features are:
 
-#### Feedforward Neural Network
+- `event_start_hour`
+- `event_start_dayofweek`
+- `event_start_month`
 
-The deep learning model is a multilayer perceptron implemented in PyTorch.
-
-##### Model Structure
-
-- input layer,
-- fully connected layer with 64 units and ReLU activation,
-- fully connected layer with 32 units and ReLU activation,
-- output layer with sigmoid activation.
-
-The model architecture is appropriate for tabular binary classification because it can capture nonlinear relationships between features.
-
-### 7.3 Training Procedure
-
-The model was trained using an 80-20 train-validation split. After training, predicted probabilities were generated on the validation set and AUC-ROC was calculated to measure generalization performance.
-
----
-
-## 8. Results
-
-The project achieved a **Hybrid Score of 0.82691** on the Kaggle leaderboard.
-
-### Competition Outcome
-
-- **Hybrid Score:** 0.82691
-  - Components: 0.3 × C-index + 0.7 × (1 - Weighted Brier Score)
-- **Submission Status:** Successfully submitted
-
-![Leaderboard Screenshot](Leaderboard.png)
-
-This score indicates that the implemented baseline pipeline achieved strong performance in both ranking fires by urgency (C-index) and generating calibrated probability forecasts (Brier Score) across the 24h, 48h, and 72h horizons.
+These may indirectly capture environmental conditions, seasonal fire behavior, or response differences.
 
 ---
 
-## 9. Discussion
+## 6. Methodology
 
-The results demonstrate that the baseline survival models successfully addressed a real-world operational forecasting challenge. The achieved hybrid score of 0.82691 reflects strong performance in two complementary objectives:
+The improved workflow is implemented in `TensorTitans_Improved.ipynb`.
 
-1. **Ranking Quality (C-index):** The models correctly rank fires by threat urgency, supporting emergency triage decisions.
-2. **Probability Calibration (Brier Score):** The forecasts are well-calibrated across multiple time horizons, allowing operators to apply probabilistic thresholds for alerts and resource deployment.
+### 6.1 Data Loading
 
-The multi-horizon approach (12h, 24h, 48h, 72h) aligns with operational decision windows. The 48h horizon is weighted most heavily (40%) in evaluation because it offers the strongest balance between actionable lead time and decision urgency.
+The notebook loads `train.csv`, `test.csv`, `metaData.csv`, and `sample_submission.csv`. It verifies that the feature columns in the test set are present in the training set and that the submission columns match the expected format.
 
-The use of early-incident signals (first 5 hours) demonstrates that reliable threat forecasts can be generated before fire behavior fully develops, critical for emergency response timing.
+### 6.2 Horizon-Specific Label Construction
+
+For each horizon, the notebook creates a binary target:
+
+- label `1`: the fire event is observed by that horizon;
+- label `0`: the fire is known not to have occurred by that horizon;
+- excluded: the row is censored before that horizon, so its status is unknown.
+
+The terminal 72-hour horizon is handled as a full-window event classification because non-event rows are known not to have hit within the competition window.
+
+This is a major improvement over using the same binary `event` probability for every horizon.
+
+### 6.3 Model Choice
+
+The improved notebook uses a blended baseline:
+
+1. **Regularized logistic regression**
+   - stable on small datasets;
+   - interpretable and less prone to overfitting;
+   - uses median imputation, missing-value indicators, and standardization.
+
+2. **Histogram gradient boosting classifier**
+   - captures nonlinear relationships;
+   - uses conservative settings to reduce overfitting;
+   - complements the linear model.
+
+The final probability is a weighted blend:
+
+```text
+0.70 x logistic regression + 0.30 x histogram gradient boosting
+```
+
+This blend is intentionally conservative because the dataset is small.
+
+### 6.4 Cross-Validation
+
+The notebook uses five-fold stratified cross-validation based on the final event indicator. For each fold and each horizon, the model is trained only on eligible rows and then predicts the held-out fold. This produces out-of-fold predictions for validation.
+
+Out-of-fold validation is important because it tests the model on data that was not used for training. This gives a more realistic estimate of generalization performance than scoring on the training data.
+
+### 6.5 Monotonic Probabilities
+
+After prediction, probabilities are forced to be non-decreasing:
+
+```text
+prob_12h <= prob_24h <= prob_48h <= prob_72h
+```
+
+This matches the meaning of cumulative event probabilities.
 
 ---
 
-## 10. Conclusion
+## 7. Evaluation
 
-This project demonstrates a complete machine learning workflow for operational wildfire threat forecasting, from data inspection and preprocessing to multi-horizon survival model development and calibrated probability submission. Team Tensor Titans built baseline models for the WiDS Worldwide Global Datathon 2026 and achieved a hybrid score of 0.82691 on the leaderboard.
+The competition uses a hybrid metric combining ranking and calibration:
 
-The work confirms that early-incident wildfire signals can be modeled effectively to generate trustworthy probability forecasts across multiple decision horizons. The project provides a foundation for emergency response systems that balance ranking accuracy (for triage) with probability calibration (for threshold-based decisions).
+```text
+Hybrid Score = 0.3 x C-index + 0.7 x (1 - Weighted Brier Score)
+```
+
+### 7.1 C-Index
+
+C-index measures ranking quality. It checks whether fires that become threatening sooner receive higher risk scores than fires that become threatening later or remain censored.
+
+### 7.2 Brier Score
+
+Brier score measures probability calibration. A lower Brier score means the predicted probabilities are closer to the true outcomes.
+
+The competition-weighted Brier score is:
+
+```text
+Weighted Brier = 0.3 x Brier@24h + 0.4 x Brier@48h + 0.3 x Brier@72h
+```
+
+The 48-hour horizon has the highest weight because it is operationally important: it gives useful warning time while still being close enough for emergency planning.
+
+### 7.3 Reported Result
+
+The team recorded a Kaggle hybrid score of 0.82691. This indicates useful performance in ranking wildfire threat urgency and producing probability estimates for the required horizons.
 
 ---
 
-## 11. Recommendations for Future Work
+## 8. Results And Discussion
 
-The following improvements are recommended for a stronger future submission:
+The original project notebook showed a baseline workflow for data loading, exploratory analysis, model training, and submission creation. However, the original modeling approach was closer to binary classification and could assign the same probability to all horizons. That weakens the survival-analysis interpretation because it does not fully model timing.
 
-- implement advanced survival models: Cox proportional hazards, random survival forests, gradient boosting survival,
-- apply probability calibration techniques: isotonic regression, Platt scaling,
-- extract more sophisticated temporal features from fire dynamics,
-- develop ensemble methods combining multiple survival models,
-- conduct aggressive hyperparameter tuning optimized for hybrid score,
-- apply stratified k-fold cross-validation with proper event/censor handling,
-- validate models against held-out fire seasons for operational deployment readiness.
+The improved notebook addresses this limitation by training separate horizon-specific models and using censor-aware validation. This makes the workflow more aligned with the competition objective. It also prevents logically inconsistent predictions by enforcing monotonic probabilities.
+
+Important practical signals in the dataset include distance to evacuation-zone centroid, closing speed, fire growth rate, centroid movement, and directional alignment. A fire that is growing quickly, moving toward an evacuation zone, and already close to that zone should receive higher threat probability than a distant fire moving away.
+
+Because the training dataset has only 221 rows, model complexity must be controlled carefully. A very complex neural network or large ensemble may overfit the training data. For that reason, the improved baseline uses regularized logistic regression as the main model and adds a small nonlinear component through histogram gradient boosting.
 
 ---
 
-## 12. References
+## 9. Project Deliverables
 
-- WiDS Worldwide Global Datathon 2026: https://www.kaggle.com/competitions/WiDSWorldWide_GlobalDathon26
-- PyTorch Documentation: https://pytorch.org/docs/
-- Scikit-learn Documentation: https://scikit-learn.org/
+The cleaned project now contains:
+
+| Deliverable | File |
+|---|---|
+| Improved modeling notebook | `TensorTitans_Improved.ipynb` |
+| Original notebook for comparison | `TensorTitans.ipynb` |
+| Dataset explanation | `Dataset_explanation.md` |
+| Full report source | `Project_Report.md` |
+| Full Word report | `TensorTitans_Project_Report.docx` |
+| README documentation | `ReadMe.md` |
+| Presentation slides | `Slide_Presentation.md` |
+| Presentation script | `Presentation_Script.md` |
+| Leaderboard image | `Leaderboard.png` |
+
+Unnecessary clutter such as the empty text file, duplicate backup notebook, and generated submission CSV was removed from the repository.
 
 ---
 
-## 13. Appendix
+## 10. Limitations
 
-### A. Project Files
+The current improved notebook is still a baseline. It does not yet use dedicated survival-analysis libraries such as `scikit-survival`. It also does not perform advanced probability calibration or repeated cross-validation. Because the dataset is small, validation scores can vary depending on fold splits.
 
-- `train.csv`
-- `test.csv`
-- `metaData.csv`
-- `sample_submission.csv`
-- `TensorTitans.ipynb`
-- `Leaderboard.png`
+Another limitation is that some feature descriptions in `metaData.csv` are high-level rather than fully detailed. The project therefore explains feature groups based on available metadata and column names.
 
-### B. Notes
+---
 
-This report is written as a Word-style template suitable for direct conversion into a formal university submission document. The placeholders in the title block can be replaced with the required course, instructor, and submission details.
+## 11. Recommendations For Future Work
+
+Future improvements should include:
+
+1. Survival-specific models such as Coxnet, Random Survival Forest, and Gradient Boosting Survival Analysis.
+2. Probability calibration using Platt scaling or isotonic regression inside cross-validation folds.
+3. Repeated cross-validation for more stable validation estimates.
+4. Feature selection to reduce noise and overfitting.
+5. Model ensembling across survival models and horizon-specific classifiers.
+6. Error analysis on fires that are close to evacuation zones but do not become events.
+7. Better visual explanations of fire movement, distance trends, and directional alignment.
+
+---
+
+## 12. Conclusion
+
+This project demonstrates a complete machine learning workflow for wildfire threat prediction using early fire behavior data. The task is meaningful because emergency managers need timely and calibrated forecasts to prioritize response actions. The dataset is challenging because it combines multi-horizon prediction with right-censored survival outcomes.
+
+Team Tensor Titans developed the project from dataset inspection through model training, evaluation, submission formatting, and documentation. The cleaned repository now includes an improved censor-aware notebook, clearer README, dataset explanation, presentation materials, and this full Word report.
+
+The most important technical lesson is that wildfire threat forecasting should account for timing. A model should not simply predict whether a fire ever becomes dangerous; it should estimate how soon that danger may occur. The improved workflow better reflects this by producing separate, monotonic probabilities for 12h, 24h, 48h, and 72h.
+
+---
+
+## 13. References
+
+1. WiDS Worldwide Global Datathon 2026. https://www.kaggle.com/competitions/WiDSWorldWide_GlobalDathon26
+2. Scikit-learn Documentation. https://scikit-learn.org/
+3. PyTorch Documentation. https://pytorch.org/docs/
+4. Project files: `train.csv`, `test.csv`, `metaData.csv`, `sample_submission.csv`, and `TensorTitans_Improved.ipynb`.
+
+---
+
+## Appendix A: Key Terms
+
+**Fire perimeter:** the estimated boundary around the burning area.  
+**Fire centroid:** the approximate center point of the fire perimeter.  
+**Evacuation-zone centroid:** the center point of an evacuation zone.  
+**Right censoring:** a situation where the event is not observed during the study window, so the exact future event time is unknown.  
+**C-index:** a ranking metric for survival predictions.  
+**Brier score:** a probability calibration error metric.  
+**Monotonic probability:** a probability sequence that does not decrease as the time horizon becomes longer.

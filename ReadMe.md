@@ -22,6 +22,12 @@ The project uses right-censored survival data, so the model must consider both w
 **Competition:** [WiDS Worldwide Global Datathon 2026](https://www.kaggle.com/competitions/WiDSWorldWide_GlobalDathon26)  
 **Reported leaderboard score:** 0.82691 hybrid score
 
+## Project Report
+
+**Final report:** `TensorTitans_Project_Report.pdf`
+
+This PDF is the formatted full project report for submission or review. It summarizes the problem background, dataset, methodology, evaluation metric, results, discussion, limitations, and future work.
+
 ## Repository Contents
 
 | File | Purpose |
